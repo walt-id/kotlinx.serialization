@@ -378,7 +378,9 @@ internal class CborParser(private val input: ByteArrayInput, private val verifyO
             readByte()
             Triple(ans, null, collectedTags)
         } else {
-            val res = readUnsignedIntegerIgnoringMajorType { majorType.majorTypeName }
+            // FIX: Restore readNumber() so negative map keys are preserved
+            val res = readNumber()
+            //val res = readUnsignedIntegerIgnoringMajorType { majorType.majorTypeName }
             readByte()
             Triple(null, res, collectedTags)
         }
