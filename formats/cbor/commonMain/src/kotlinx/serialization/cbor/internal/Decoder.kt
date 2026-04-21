@@ -152,7 +152,8 @@ internal open class CborReader(override val cbor: Cbor, internal val parser: Cbo
 
     override fun decodeBoolean() = parser.nextBoolean(tags)
 
-    private fun nextNumberWithinRange(from: Long, to: Long, type: String): Long {
+    /*
+     private fun nextNumberWithinRange(from: Long, to: Long, type: String): Long {
         val number = parser.nextNumber(tags)
         if (number !in from..to) {
             throw CborDecodingException("Decoded number $number is not within the range for type $type ([$from..$to])")
@@ -165,6 +166,25 @@ internal open class CborReader(override val cbor: Cbor, internal val parser: Cbo
     override fun decodeChar() =
         nextNumberWithinRange(Char.MIN_VALUE.code.toLong(), Char.MAX_VALUE.code.toLong(), "Char").toInt().toChar()
     override fun decodeInt() = nextNumberWithinRange(Int.MIN_VALUE.toLong(), Int.MAX_VALUE.toLong(), "Int").toInt()
+     */
+
+    override fun decodeByte() = parser.nextNumberWithinRange(
+        tags, Byte.MIN_VALUE.toLong(), Byte.MAX_VALUE.toLong(), UByte.MAX_VALUE.toLong(), "Byte"
+    ).toByte()
+
+    override fun decodeShort() = parser.nextNumberWithinRange(
+        tags, Short.MIN_VALUE.toLong(), Short.MAX_VALUE.toLong(), UShort.MAX_VALUE.toLong(), "Short"
+    ).toShort()
+
+    override fun decodeChar() = parser.nextNumberWithinRange(
+        tags, Char.MIN_VALUE.code.toLong(), Char.MAX_VALUE.code.toLong(),
+        /* no unsigned type for Char */ -1, "Char"
+    ).toInt().toChar()
+
+    override fun decodeInt() = parser.nextNumberWithinRange(
+        tags, Int.MIN_VALUE.toLong(), Int.MAX_VALUE.toLong(), UInt.MAX_VALUE.toLong(), "Int"
+    ).toInt()
+
     override fun decodeLong() = parser.nextNumber(tags)
 
     override fun decodeNull() = parser.nextNull(tags)
@@ -386,7 +406,26 @@ internal class CborParser(private val input: ByteArrayInput, private val verifyO
         }
     }
 
-    override fun nextNumber(tags: ULongArray?): Long {
+    internal fun nextNumberWithinRange(
+        tags: ULongArray?,
+        from: Long,
+        to: Long,
+        unsignedUpperBound: Long,
+        type: String,
+    ): Long {
+        val number = nextNumber(tags)
+        if (number !in from..to && number !in 0..unsignedUpperBound) {
+            throw CborDecodingException(buildString {
+                append("Decoded number $number is not within the range for type $type ([$from..$to])")
+                if (unsignedUpperBound >= 0) {
+                    append(", nor it is within the range for U$type ([0..$unsignedUpperBound])")
+                }
+            })
+        }
+        return number
+    }
+
+    override fun nextNumber(tags: ULongArray? = null): Long {
         processTags(tags)
         val res = readNumber()
         readByte()

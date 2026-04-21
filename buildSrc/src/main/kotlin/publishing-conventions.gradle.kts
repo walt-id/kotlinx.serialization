@@ -1,10 +1,8 @@
 import groovy.util.*
 import org.gradle.jvm.tasks.Jar
-import org.gradle.kotlin.dsl.*
-import org.gradle.plugins.signing.*
 import org.jetbrains.kotlin.gradle.dsl.*
 import org.jetbrains.kotlin.gradle.tasks.*
-import java.net.*
+import java.nio.file.Paths
 
 /*
  * Copyright 2017-2024 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license.
@@ -69,6 +67,7 @@ afterEvaluate {
                         artifactId = project.name
                         reconfigureMultiplatformPublication(publications.getByName("jvm") as MavenPublication)
                     }
+
                     "metadata", "jvm", "js", "native" -> artifactId = "${project.name}-$type"
                 }
                 logger.info("Artifact id = $artifactId")
@@ -92,7 +91,7 @@ val testRepositoryDir = project.layout.buildDirectory.dir("testRepository")
 
 publishing {
     repositories {
-        addPublishingRepositoryIfPresent()
+        addPublishingRepository()
 
         /**
          * Maven repository in build directory to check published artifacts.
@@ -114,13 +113,11 @@ interface LocalArtifactAttr : Named {
 }
 
 val testPublicationTask: TaskCollection<*> = tasks.named { name -> name == "publishAllPublicationsToTestRepository" }
-configurations.register("testPublication") {
-    isVisible = false
-    isCanBeResolved = false
+configurations.consumable("testPublication") {
     // this configuration produces modules that can be consumed by other projects
-    isCanBeConsumed = true
     attributes {
         attribute(Attribute.of("kotlinx.serialization.repository", String::class.java), "test")
+        attribute(Usage.USAGE_ATTRIBUTE, objects.named<Usage>("repo-testing"))
     }
     outgoing.artifact(testRepositoryDir) {
         builtBy(testPublicationTask)
@@ -169,6 +166,28 @@ fun MavenPom.configureMavenCentralMetadata() {
 
     scm {
         url = "https://github.com/Kotlin/kotlinx.serialization"
+    }
+}
+
+// Add Implementation-* attributes to JAR's manifest
+// While the manifest and these attributes could be added to any JAR file,
+// it does not make a lot of sense for anything but JAR files with actual implementation.
+// Those are JAR files without a classifier (where classifier is sources, javadoc, you name it).
+// Unfortunately, archiveClassifier is always empty during the configuration phase,
+// so the check is postponed until the actual task execution.
+tasks.withType<Jar>().configureEach {
+    doFirst {
+        // Skip all non-main JARs (sources, javadoc, etc)
+        if (archiveClassifier.getOrElse("").isNotEmpty()) return@doFirst
+        // Skip multiplatform metadata JARs
+        if (isMultiplatform && archiveAppendix.getOrElse("") != "jvm") return@doFirst
+        manifest {
+            attributes(
+                "Implementation-Vendor" to "JetBrains",
+                "Implementation-Title" to project.name,
+                "Implementation-Version" to project.version,
+            )
+        }
     }
 }
 
@@ -232,17 +251,17 @@ fun MavenPublication.signPublicationIfKeyPresent() {
     }
 }
 
-// Artifacts are published to an intermediate repo (libs.repo.url) first,
-// and then deployed to the central portal.
-fun RepositoryHandler.addPublishingRepositoryIfPresent() {
-    val repositoryUrl = getSensitiveProperty("libs.repo.url")
-    if (!repositoryUrl.isNullOrBlank()) {
-        maven {
-            url = uri(repositoryUrl)
-            credentials {
-                username = getSensitiveProperty("libs.repo.user")
-                password = getSensitiveProperty("libs.repo.password")
-            }
+// Artifacts are published to a local repo, then all combined into a deployment bundle elsewhere
+fun RepositoryHandler.addPublishingRepository() {
+    val buildRepoLocationProperty = getSensitiveProperty("build.repo.path")
+    val buildRepoLocation: Any = if (buildRepoLocationProperty.isNullOrBlank()) {
+        project.rootProject.layout.buildDirectory.dir("repo")
+    } else {
+        Paths.get(buildRepoLocationProperty).toUri()
+    }
+    maven {
+        maven(buildRepoLocation) {
+            name = "buildRepo"
         }
     }
 }
