@@ -152,7 +152,6 @@ internal open class CborReader(override val cbor: Cbor, internal val parser: Cbo
 
     override fun decodeBoolean() = parser.nextBoolean(tags)
 
-    /*
      private fun nextNumberWithinRange(from: Long, to: Long, type: String): Long {
         val number = parser.nextNumber(tags)
         if (number !in from..to) {
@@ -166,8 +165,8 @@ internal open class CborReader(override val cbor: Cbor, internal val parser: Cbo
     override fun decodeChar() =
         nextNumberWithinRange(Char.MIN_VALUE.code.toLong(), Char.MAX_VALUE.code.toLong(), "Char").toInt().toChar()
     override fun decodeInt() = nextNumberWithinRange(Int.MIN_VALUE.toLong(), Int.MAX_VALUE.toLong(), "Int").toInt()
-     */
 
+    /*
     override fun decodeByte() = parser.nextNumberWithinRange(
         tags, Byte.MIN_VALUE.toLong(), Byte.MAX_VALUE.toLong(), UByte.MAX_VALUE.toLong(), "Byte"
     ).toByte()
@@ -184,6 +183,7 @@ internal open class CborReader(override val cbor: Cbor, internal val parser: Cbo
     override fun decodeInt() = parser.nextNumberWithinRange(
         tags, Int.MIN_VALUE.toLong(), Int.MAX_VALUE.toLong(), UInt.MAX_VALUE.toLong(), "Int"
     ).toInt()
+     */
 
     override fun decodeLong() = parser.nextNumber(tags)
 
@@ -425,7 +425,7 @@ internal class CborParser(private val input: ByteArrayInput, private val verifyO
         return number
     }
 
-    override fun nextNumber(tags: ULongArray? = null): Long {
+    override fun nextNumber(tags: ULongArray?): Long {
         processTags(tags)
         val res = readNumber()
         readByte()
